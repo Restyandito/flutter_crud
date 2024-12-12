@@ -16,22 +16,119 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final AuthService _authService = AuthService();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final TextEditingController _oldPasswordController = TextEditingController();
+  final TextEditingController _newPasswordController = TextEditingController();
 
-  // Fungsi untuk menghapus akun pengguna tertentu
-  Future<void> _deleteAccount(String uid) async {
+  // Fungsi untuk mengubah password
+  Future<void> _changePassword() async {
+    String oldPassword = _oldPasswordController.text;
+    String newPassword = _newPasswordController.text;
+
+    if (oldPassword.isEmpty || newPassword.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("Pastikan semua kolom diisi"),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+
     try {
-      await _authService.deleteAccount(uid);
+      // Menggunakan Firebase Auth untuk memverifikasi password lama dan mengubah password
+      await _authService.changePassword(oldPassword, newPassword);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("Password berhasil diubah"),
+        backgroundColor: Colors.green,
+      ));
+      Navigator.of(context).pop(); // Menutup dialog
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("Gagal mengubah password: $e"),
+        backgroundColor: Colors.red,
+      ));
+    }
+  }
+
+  // Fungsi untuk menghapus akun pengguna yang sedang login
+  Future<void> _deleteAccount() async {
+    try {
+      await _authService.deleteAccount(widget.user.uid);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text("Akun berhasil dihapus"),
         backgroundColor: Colors.green,
       ));
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => LoginPage()), // Kembali ke halaman login setelah penghapusan akun
+            (Route<dynamic> route) => false,
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text("Gagal menghapus akun: $e"),
         backgroundColor: Colors.red,
       ));
     }
-    setState(() {}); // Refresh data setelah penghapusan
+  }
+
+  // Fungsi untuk membuka dialog ubah password
+  void _showChangePasswordDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Ubah Password"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _oldPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(labelText: "Password Lama"),
+              ),
+              TextField(
+                controller: _newPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(labelText: "Password Baru"),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text("Batal"),
+            ),
+            TextButton(
+              onPressed: _changePassword,
+              child: Text("Ubah"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Fungsi untuk konfirmasi hapus akun
+  void _showDeleteAccountDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Konfirmasi Hapus Akun"),
+          content: Text("Apakah Anda yakin ingin menghapus akun Anda? Ini tidak dapat dibatalkan."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text("Batal"),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _deleteAccount();
+              },
+              child: Text("Hapus"),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // Fungsi untuk logout
@@ -50,23 +147,6 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text("Gagal logout: $e"),
-        backgroundColor: Colors.red,
-      ));
-    }
-  }
-
-  // Fungsi untuk menghapus akun yang sedang login
-  Future<void> _deleteCurrentUserAccount() async {
-    try {
-      await _authService.deleteAccount(widget.user.uid);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("Akun Anda berhasil dihapus"),
-        backgroundColor: Colors.green,
-      ));
-      Navigator.popUntil(context, (route) => route.isFirst);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("Gagal menghapus akun: $e"),
         backgroundColor: Colors.red,
       ));
     }
@@ -92,36 +172,16 @@ class _HomePageState extends State<HomePage> {
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.logout),
-            onPressed: _logout,
+            icon: Icon(Icons.lock),
+            onPressed: _showChangePasswordDialog, // Membuka dialog ubah password
           ),
           IconButton(
             icon: Icon(Icons.delete_forever),
-            onPressed: () async {
-              bool confirmDelete = await showDialog(
-                context: context,
-                builder: (context) {
-                  return AlertDialog(
-                    title: Text("Konfirmasi Hapus Akun"),
-                    content: Text("Apakah Anda yakin ingin menghapus akun Anda sendiri?"),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        child: Text("Batal"),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(true),
-                        child: Text("Hapus"),
-                      ),
-                    ],
-                  );
-                },
-              );
-
-              if (confirmDelete) {
-                _deleteCurrentUserAccount();
-              }
-            },
+            onPressed: _showDeleteAccountDialog, // Membuka dialog hapus akun
+          ),
+          IconButton(
+            icon: Icon(Icons.logout),
+            onPressed: _logout,
           ),
         ],
       ),
@@ -162,36 +222,6 @@ class _HomePageState extends State<HomePage> {
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text("UID: $uid"),
-                  trailing: widget.user.uid != uid
-                      ? IconButton(
-                    icon: Icon(Icons.delete, color: Colors.red),
-                    onPressed: () async {
-                      bool confirmDelete = await showDialog(
-                        context: context,
-                        builder: (context) {
-                          return AlertDialog(
-                            title: Text("Konfirmasi Hapus Akun"),
-                            content: Text("Apakah Anda yakin ingin menghapus akun ini?"),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(context).pop(false),
-                                child: Text("Batal"),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.of(context).pop(true),
-                                child: Text("Hapus"),
-                              ),
-                            ],
-                          );
-                        },
-                      );
-
-                      if (confirmDelete) {
-                        _deleteAccount(uid);
-                      }
-                    },
-                  )
-                      : null,
                 ),
               );
             },

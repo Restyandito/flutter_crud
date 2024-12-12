@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_service.dart'; // Impor AuthService
+import '../services/auth_service.dart';
+import 'login_page.dart'; // Impor AuthService
 
 class RegistrationPage extends StatefulWidget {
   const RegistrationPage({Key? key}) : super(key: key);
@@ -44,13 +45,18 @@ class _RegistrationPageState extends State<RegistrationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Registrasi berhasil!")),
       );
-      Navigator.pop(context);
+      // Navigasi ke halaman login setelah registrasi berhasil
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => LoginPage()),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Registrasi gagal. Silakan coba lagi.")),
       );
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
